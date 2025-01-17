@@ -1,4 +1,4 @@
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Tuple
 from dataclasses import dataclass
 import hashlib
 
@@ -91,7 +91,14 @@ class ParserTables:
         """Convert token to terminal symbol."""
         if token_type == 'symbol':
             if token_value == '#':
-                return '#include'  # Special case for #include
+                return '#include'
+                
+            if token_value in ['<<', '>>']: # Input/output operators
+                return token_value
+                
+            if token_value in ['<=', '>=', '==', '!=']:  # Comparison operators
+                return token_value
+                
             return token_value
             
         if token_type == 'reservedword':
@@ -256,4 +263,3 @@ class ParserTables:
         if terminal not in self.parse_table[non_terminal]:
             raise ValueError(f"Unknown terminal: {terminal}")
         return self.parse_table[non_terminal][terminal]
-    
