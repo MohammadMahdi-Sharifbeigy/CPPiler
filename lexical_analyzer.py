@@ -17,7 +17,8 @@ class LexicalAnalyzer:
             ('identifier', r'[a-zA-Z][a-zA-Z0-9]*'),
             ('number', r'\d+'),
             ('string', r'"[^"]*"'),
-            ('symbol', r'\(|\)|\[|\]|,|;|\+|-|\*|/|==|!=|>|>=|<|<=|=|\|\||<<|>>|{|}|<|>'),
+            # fix the orders becausee of miss undrestanding between < and << or > and >>
+            ('symbol', r'<<|>>|<=|>=|==|!=|\(|\)|\[|\]|,|;|\+|-|\*|/|=|\|\||{|}|<|>'),
             ('whitespace', r'[ \t\n]+')
         ]
         
