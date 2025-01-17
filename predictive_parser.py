@@ -35,23 +35,37 @@ class PredictiveParser:
             '>>': 'input',
             '<<': 'output'
         }
+        self.error_handler = ErrorHandler()
 
     def get_terminal_symbol(self, token_type: str, token_value: str) -> str:
         """Convert token to terminal symbol."""
         if token_type == 'symbol' and token_value == '#':
+            # Look ahead to check if next token is 'include'
             next_idx = self.current_token_idx + 1
             if next_idx < len(self.token_stream):
-                next_type, next_value = self.token_stream[next_idx]
+                next_type, next_value, _ = self.token_stream[next_idx]  # Unpack all three values
                 if next_type == 'reservedword' and next_value == 'include':
-                    self.current_token_idx += 1
+                    self.current_token_idx += 1  # Skip the next token
                     return '#include'
-            return None
+            return None  # Skip '#' if not followed by include
         
         if token_type == 'symbol':
-            if token_value in ['<<', '>>', '>=', '<=', '==', '!=']:
+            # Input/output operators
+            if token_value == '<<' or token_value == '>>':
                 return token_value
-            return token_value
-            
+            # Comparison operators    
+            if token_value in ['<=', '>=', '==', '!=']:
+                return token_value
+            # Single operators
+            if token_value in ['<', '>']:
+                # Check if it's not part of a compound operator
+                next_idx = self.current_token_idx + 1
+                if next_idx < len(self.token_stream):
+                    next_type, next_value, _ = self.token_stream[next_idx]  # Unpack all three values
+                    if next_type == 'symbol' and next_value == token_value:
+                        return None  # Skip single operator if part of compound
+                return token_value
+        
         if token_type == 'identifier':
             return 'identifier'
         elif token_type == 'number':
@@ -63,11 +77,16 @@ class PredictiveParser:
             
         return token_value
 
-    def parse(self, tokens: List[Tuple[str, str]]) -> ParseTreeNode:
+    def parse(self, tokens: List[Tuple[str, str, int]], source_code: str) -> ParseTreeNode:
         """Parse the input tokens using the parsing table."""
         self.token_stream = tokens
         self.current_token_idx = 0
         self.last_was_hash = False
+        
+        self.error_handler.initialize_source(source_code)
+        
+        if not self.error_handler.line_positions:
+            self.error_handler.line_positions = [0]
         
         self.parse_tree_root = ParseTreeNode('Start', [], None)
         
@@ -77,9 +96,10 @@ class PredictiveParser:
         
         while stack and self.current_token_idx < len(self.token_stream):
             top = stack[-1]
-            token_type, token_value = self.token_stream[self.current_token_idx]
+            token_type, token_value, position = self.token_stream[self.current_token_idx]
             terminal = self.get_terminal_symbol(token_type, token_value)
             
+            # Skip this token if it returned None like standalone '#'
             if terminal is None:
                 self.current_token_idx += 1
                 continue
@@ -87,49 +107,58 @@ class PredictiveParser:
             if top == '$' and terminal == '$':
                 return self.parse_tree_root
                 
-            if top == terminal:
+            if top == terminal:  # Match terminal
                 stack.pop()
                 current_node.token_type = token_type
                 current_node.token_value = token_value
                 self.current_token_idx += 1
                 current_node = current_node.parent
-            elif top not in self.parser_tables.grammar:
-                raise SyntaxError(
-                    f"Expected {top}, found {token_value} (type: {token_type})"
-                )
+            elif top not in self.parser_tables.grammar:  # Terminal on top, but no match
+                error_message = f"Unexpected token '{token_value}'. Expected {top}"
+                self.error_handler.handle_syntax_error(token_value, top, position)
             else:  # Non-terminal on top
                 try:
                     production = self.parser_tables.get_parse_table_entry(top, terminal)
                 except ValueError as e:
-                    raise SyntaxError(
-                        f"Parse error at token '{token_value}': {str(e)}"
-                    )
+                    error_message = f"Unexpected symbol '{token_value}' after '{top}'"
+                    self.error_handler.handle_syntax_error(token_value, "", position)
                 
                 if not production:
-                    raise SyntaxError(
-                        f"No production rule for {top} with input {terminal}"
-                    )
+                    context = self._get_parsing_context(top)
+                    error_message = (f"Syntax error at '{token_value}'. "
+                                   f"Expected one of: {', '.join(context)}")
+                    self.error_handler.handle_syntax_error(token_value, context, position)
                     
                 stack.pop()
                 if production != 'ε':
                     symbols = production.split()
-                    # Add symbols to stack in reverse order
                     for symbol in reversed(symbols):
                         stack.append(symbol)
                         
-                    # Create nodes for all symbols in production
                     for symbol in symbols:
                         new_node = ParseTreeNode(symbol, [], current_node)
                         current_node.children.append(new_node)
                     
-                    # Move to first child for next iteration
                     if current_node.children:
                         current_node = current_node.children[0]
-                
+        
         if stack and stack[-1] != '$':
-            raise SyntaxError(f"Unexpected end of input, expected {stack[-1]}")
+            last_token = self.token_stream[self.current_token_idx - 1]
+            error_message = f"Unexpected end of input. Expected {stack[-1]}"
+            self.error_handler.handle_syntax_error(last_token[1], stack[-1], last_token[2])
             
         return self.parse_tree_root
+
+    def _get_parsing_context(self, non_terminal: str) -> List[str]:
+        """Get the list of possible terminals that could appear after the given non-terminal."""
+        context = set()
+        
+        # Get all terminals that have productions for this non-terminal
+        for terminal in self.parser_tables.terminals:
+            if self.parser_tables.parse_table[non_terminal].get(terminal):
+                context.add(terminal)
+                
+        return sorted(list(context))
 
     def get_production_sequence(self) -> List[str]:
         """Return the sequence of productions used in parsing."""
@@ -158,10 +187,10 @@ class PredictiveParser:
 class ErrorHandler:
     def __init__(self):
         self.errors = []
-        self.current_line = 1
-        self.line_positions = []
         self.source_code = ""
-        
+        self.line_positions = []
+        self.current_position = 0
+
     def initialize_source(self, source_code: str):
         """Initialize with source code and compute line positions."""
         self.source_code = source_code
@@ -170,89 +199,98 @@ class ErrorHandler:
         for i, char in enumerate(source_code):
             if char == '\n':
                 self.line_positions.append(i + 1)
-    
+                
     def get_line_number(self, position: int) -> int:
         """Get line number for a given position in the source."""
         for line_num, start_pos in enumerate(self.line_positions, 1):
             if position < start_pos:
                 return line_num - 1
         return len(self.line_positions)
-    
+        
+    def get_column_number(self, position: int) -> int:
+        """Get column number for a given position in the source."""
+        line_num = self.get_line_number(position)
+        line_start = self.line_positions[line_num - 1]
+        return position - line_start + 1
+
     def get_line_content(self, line_number: int) -> str:
         """Get the content of a specific line."""
         if line_number < 1 or line_number > len(self.line_positions):
             return ""
-        
+            
         start = self.line_positions[line_number - 1]
         end = (self.line_positions[line_number] 
                if line_number < len(self.line_positions) 
                else len(self.source_code))
-        
+               
         return self.source_code[start:end].rstrip('\n')
-    
+
+    def handle_syntax_error(self, token_value: str, expected_value: str, position: int):
+        """Handle syntax error with detailed information."""
+        if isinstance(expected_value, list):
+            message = f"Syntax Error: Unexpected '{token_value}'. Expected one of: {', '.join(expected_value)}"
+        else:
+            message = f"Syntax Error: Expected '{expected_value}', found '{token_value}'"
+            
+        error_msg = self.format_error(position, message)
+        raise SyntaxError(error_msg)
+
     def format_error(self, position: int, message: str) -> str:
-        """Format error message with line number, line content, and error pointer."""
+        """Format error message with line number, column number, and context."""
         line_number = self.get_line_number(position)
+        column = self.get_column_number(position)
         line_content = self.get_line_content(line_number)
         
-        line_start = self.line_positions[line_number - 1]
-        column = position - line_start
-        
         error_msg = [
-            f"Error at line {line_number}, column {column + 1}:",
+            f"\nError at line {line_number}, column {column}:",
             message,
-            line_content,
-            " " * column + "^"
+            "\nContext:",
         ]
         
-        if line_number > 1:
-            prev_line = self.get_line_content(line_number - 1)
-            error_msg.insert(2, prev_line)
-        if line_number < len(self.line_positions):
-            next_line = self.get_line_content(line_number + 1)
-            error_msg.insert(-1, next_line)
-            
-        return "\n".join(error_msg)
-    
-    def handle_error(self, position: int, message: str):
-        """Handle an error by formatting it with context and raising an exception."""
-        error_message = self.format_error(position, message)
-        raise SyntaxError(error_message)
-    
-    def check_syntax(self, token_stream, source_code: str) -> bool:
-        """Check for basic syntax errors."""
-        self.initialize_source(source_code)
-        valid = True
-        last_token = None
-        position = 0
+        start_line = max(1, line_number - 2)
+        end_line = min(len(self.line_positions), line_number + 2)
         
-        for token_type, token_value, token_position in token_stream:
-            if token_value == '\n':
-                self.current_line += 1
-                continue
+        for i in range(start_line, end_line + 1):
+            line_text = self.get_line_content(i)
+            prefix = "-> " if i == line_number else "   "
+            error_msg.append(f"{prefix}{i:4d} | {line_text}")
+            if i == line_number:
+                error_msg.append("      " + " " * (column - 1) + "^")
                 
+        return "\n".join(error_msg)
+
+    def handle_missing_semicolon(self, position: int):
+        """Handle missing semicolon error."""
+        message = "Missing semicolon at end of statement"
+        error_msg = self.format_error(position, message)
+        raise SyntaxError(error_msg)
+
+    def handle_invalid_assignment(self, position: int):
+        """Handle invalid assignment error."""
+        message = "Invalid left-hand side in assignment"
+        error_msg = self.format_error(position, message)
+        raise SyntaxError(error_msg)
+
+    def check_syntax(self, token_stream, source_code: str) -> bool:
+        """Check for basic syntax errors in the token stream."""
+        self.initialize_source(source_code)
+        last_token = None
+        
+        for token_type, token_value, position in token_stream:
             if last_token:
                 last_type, last_value, last_pos = last_token
+                
                 if (last_type in ['identifier', 'number'] and 
                     token_value != ';' and token_value != ','):
-                    self.handle_error(
-                        last_pos,
-                        f"Missing semicolon after '{last_value}'"
-                    )
-                    valid = False
-                
-                if (token_value == '=' and last_type not in 
-                    ['identifier', 'reservedword']):
-                    self.handle_error(
-                        token_position,
-                        f"Invalid left-hand side in assignment"
-                    )
-                    valid = False
+                    self.handle_missing_semicolon(last_pos)
+                    
+                if (token_value == '=' and 
+                    last_type not in ['identifier', 'reservedword']):
+                    self.handle_invalid_assignment(position)
             
-            last_token = (token_type, token_value, token_position)
-            position = token_position
+            last_token = (token_type, token_value, position)
             
-        return valid
+        return True
 
 class TreeSearcher:
     def __init__(self, parse_tree_root: ParseTreeNode):
