@@ -8,6 +8,7 @@ def print_parse_table(parse_table, terminals, non_terminals):
     """Print parse table in a clear, readable format."""
     print("\n=== Parse Table ===\n")
     
+    # Filter out unused terminals
     used_terminals = []
     for terminal in sorted(terminals):
         for nt in non_terminals:
@@ -15,6 +16,7 @@ def print_parse_table(parse_table, terminals, non_terminals):
                 used_terminals.append(terminal)
                 break
     
+    # Print productions for each non-terminal
     for nt in sorted(non_terminals):
         print(f"{nt}:")
         has_productions = False
@@ -76,6 +78,7 @@ def main():
     try:
         print("\nPhase 1: Lexical Analysis")
         lexer = LexicalAnalyzer()
+        
         try:
             tokens = lexer.tokenize(test_code)
             print("\nTokens:")
@@ -93,57 +96,90 @@ def main():
                 while len(row) < 3:
                     row.append("")
                 print(f"{row[0]:<25} {row[1]:<25} {row[2]}")
+                
+            print(f"\nSuccessfully tokenized {len(tokens)} tokens.")
+            
         except ValueError as e:
-            print(f"Error: {e}")
-        
-        tokens = lexer.tokenize(test_code)
-        
-        print(f"Successfully tokenized {len(tokens)} tokens.")
-        
+            print(f"Lexical Error: {str(e)}")
+            return
+
         print("\nPhase 2: Parser Tables Construction")
         parser_tables = ParserTables()
         
+        current_pos = 0
         for token in tokens:
             parser_tables.add_token(token.name, token.value)
-        
-        parser_tables.build_parse_table()
-        
-        print_token_table(parser_tables.token_table)
-        print_parse_table(
-            parser_tables.parse_table,
-            parser_tables.terminals,
-            parser_tables.grammar.keys()
-        )
-        
-        print("\nPhase 3: Parsing")
-        parser = PredictiveParser(parser_tables)
-        error_handler = ErrorHandler()
-        
-        token_stream = [(t.name, t.value) for t in tokens]
-        token_stream.append(('$', '$'))
+            current_pos += len(token.value) + 1 
         
         try:
-            parse_tree = parser.parse(token_stream)
+            parser_tables.build_parse_table()
+            
+            print("\n=== Token Table ===")
+            current_type = None
+            for entry in parser_tables.token_table:
+                if entry.token_name != current_type:
+                    current_type = entry.token_name
+                    print(f"\n{current_type.upper()}:")
+                print(f"  {entry.token_value:<20} (hash: {entry.hash_value})")
+            
+            print("\n=== Parse Table ===")
+            terminals = sorted(parser_tables.terminals)
+            non_terminals = sorted(parser_tables.grammar.keys())
+            
+            for nt in non_terminals:
+                print(f"\n{nt}:")
+                for terminal in terminals:
+                    production = parser_tables.parse_table[nt].get(terminal, '')
+                    if production:
+                        if production == 'ε':
+                            production = 'epsilon'
+                        print(f"  {terminal:<15} -> {production}")
+                        
+        except ValueError as e:
+            print(f"Error in parse table construction: {str(e)}")
+            return
+
+        print("\nPhase 3: Parsing")
+        parser = PredictiveParser(parser_tables)
+        
+        current_pos = 0
+        token_stream = []
+        for token in tokens:
+            token_stream.append((token.name, token.value, current_pos))
+            current_pos += len(token.value) + 1
+        token_stream.append(('$', '$', current_pos))
+        
+        try:
+            # Parse tokens and initialize error handler with source code
+            parse_tree = parser.parse(token_stream, test_code)
             productions = parser.get_production_sequence()
-            print_productions(productions)
+            
+            print("\n=== Production Sequence ===")
+            for i, prod in enumerate(productions, 1):
+                print(f"{i:3}. {prod}")
             
             print("\n=== Extra Features ===")
             
+            # Tree Search
             tree_searcher = TreeSearcher(parse_tree)
             test_identifiers = ['x', 's', 't']
-            identifiers = []
+            print("\nIdentifier Definitions:")
             for identifier in test_identifiers:
                 definition = tree_searcher.find_identifier_definition(identifier)
-                identifiers.append((identifier, definition or "Not found"))
-            print_identifier_table(identifiers)
+                if definition:
+                    print(f"  {identifier:<10} -> {definition}")
+                else:
+                    print(f"  {identifier:<10} -> Not found")
             
-            print("\nSuccess! All phases completed.")
+            # Check syntax
+            if error_handler.check_syntax(token_stream, test_code):
+                print("\nSuccess! All phases completed with no syntax errors.")
             
         except SyntaxError as e:
-            print(f"\nSyntax Error: {str(e)}")
+            print(f"\nSyntax Error:\n{str(e)}")
             
     except Exception as e:
-        print(f"\nError: {str(e)}")
+        print(f"\nUnexpected Error: {str(e)}")
         import traceback
         traceback.print_exc()
 
