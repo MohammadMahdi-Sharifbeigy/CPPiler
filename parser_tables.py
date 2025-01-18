@@ -18,7 +18,9 @@ class ParserTables:
         # Map token types to their terminal symbols
         self.token_to_terminal = {
             ('reservedword', '#include'): '#include',
-            ('reservedword', '<iostream>'): '<iostream>',
+            ('symbol', '<'): '<',
+            ('symbol', '>'): '>',
+            ('reservedword', 'iostream'): 'iostream',
             ('reservedword', 'using'): 'using',
             ('reservedword', 'namespace'): 'namespace',
             ('reservedword', 'std'): 'std',
@@ -45,8 +47,6 @@ class ParserTables:
             ('symbol', '!='): '!=',
             ('symbol', '>>'): '>>',
             ('symbol', '<<'): '<<',
-            ('symbol', '>'): '>',
-            ('symbol', '<'): '<',
             ('identifier', None): 'identifier',
             ('number', None): 'number',
             ('string', None): 'string'
@@ -106,50 +106,43 @@ class ParserTables:
         
         # Handle symbols
         if token_type == 'symbol':
-            # Angle brackets for includes
-            if token_value in ['<', '>']:
-                # For '<', look ahead to ensure it's not part of '<<'
-                if token_value == '<':
+            # Check for '<' to match <LibName> pattern
+            if token_value == '<':
+                prev_idx = self.current_token_idx - 1
+                if prev_idx >= 0 and self.token_stream[prev_idx][1] == 'include':
+                    # Look ahead for library name and closing bracket
                     next_idx = self.current_token_idx + 1
-                    if next_idx < len(self.token_stream):
-                        next_type, next_value = self.token_stream[next_idx]
-                        if next_type == 'symbol' and next_value == '<':
-                            return None  # Skip single '<' if part of '<<'
-                # For '>', look ahead to ensure it's not part of '>>'
-                if token_value == '>':
-                    next_idx = self.current_token_idx + 1
-                    if next_idx < len(self.token_stream):
-                        next_type, next_value = self.token_stream[next_idx]
-                        if next_type == 'symbol' and next_value == '>':
-                            return None  # Skip single '>' if part of '>>'
-                return token_value
-                
+                    if next_idx < len(self.token_stream) and next_idx + 1 < len(self.token_stream):
+                        lib_token = self.token_stream[next_idx]
+                        close_token = self.token_stream[next_idx + 1]
+                        
+                        # Check if we have a valid library name (iostream or identifier) followed by '>'
+                        is_valid_lib = (
+                            (lib_token[1] == 'iostream') or  # Direct value check for iostream
+                            (lib_token[0] == 'identifier')   # Or any identifier
+                        )
+                        
+                        if is_valid_lib and close_token[0] == 'symbol' and close_token[1] == '>':
+                            self.current_token_idx += 2  # Skip library name and '>'
+                            return '<LibName>'
+            
             # Input/output operators
             if token_value in ['<<', '>>']:
                 return token_value
-                
+            
             # Comparison operators
             if token_value in ['<=', '>=', '==', '!=']:
                 return token_value
             
-            # Single operators and other symbols
+            # Other symbols
             return token_value
         
-        # Handle reserved words (including iostream)
+        # Handle reserved words
         if token_type == 'reservedword':
-            if token_value == 'iostream':
-                return 'iostream'  # Special case for iostream library
             return token_value
         
-        # Handle identifiers (including library names), numbers, and strings
-        if token_type == 'identifier':
-            # Check if we're in an include context
-            prev_tokens = self.token_stream[max(0, self.current_token_idx - 2):self.current_token_idx]
-            if any(t[1] == '<' for t in prev_tokens):  # If preceded by '<'
-                return 'identifier'  # Treat as library name
-            return 'identifier'
-        
-        if token_type in ['number', 'string']:
+        # Handle identifiers, numbers, and strings
+        if token_type in ['identifier', 'number', 'string']:
             return token_type
         
         return token_value
