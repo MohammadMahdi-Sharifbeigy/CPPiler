@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TYPE_CHECKING
 from dataclasses import dataclass
 from collections import deque
 
@@ -39,33 +39,54 @@ class PredictiveParser:
 
     def get_terminal_symbol(self, token_type: str, token_value: str) -> str:
         """Convert token to terminal symbol."""
+        # Handle #include as a special case
         if token_type == 'symbol' and token_value == '#':
             # Look ahead to check if next token is 'include'
             next_idx = self.current_token_idx + 1
             if next_idx < len(self.token_stream):
-                next_type, next_value, _ = self.token_stream[next_idx]  # Unpack all three values
+                next_type, next_value, _ = self.token_stream[next_idx]
                 if next_type == 'reservedword' and next_value == 'include':
-                    self.current_token_idx += 1  # Skip the next token
+                    self.current_token_idx += 1  # Skip the include token
                     return '#include'
             return None  # Skip '#' if not followed by include
         
+        # Handle symbols
         if token_type == 'symbol':
+            # Check for '<' to match <LibName> pattern
+            if token_value == '<':
+                prev_idx = self.current_token_idx - 1
+                if prev_idx >= 0:
+                    next_idx = self.current_token_idx + 1
+                    if next_idx < len(self.token_stream) and next_idx + 1 < len(self.token_stream):
+                        lib_type, lib_value, _ = self.token_stream[next_idx]
+                        close_type, close_value, _ = self.token_stream[next_idx + 1]
+                        
+                        # Check if we have a valid library name followed by '>'
+                        is_valid_lib = (lib_value == 'iostream' or lib_type == 'identifier')
+                        
+                        if is_valid_lib and close_type == 'symbol' and close_value == '>':
+                            self.current_token_idx += 2  # Skip library name and '>'
+                            return '<LibName>'
+            
             # Input/output operators
-            if token_value == '<<' or token_value == '>>':
+            if token_value in ['<<', '>>']:
                 return token_value
+                
             # Comparison operators    
             if token_value in ['<=', '>=', '==', '!=']:
                 return token_value
+                
             # Single operators
             if token_value in ['<', '>']:
                 # Check if it's not part of a compound operator
                 next_idx = self.current_token_idx + 1
                 if next_idx < len(self.token_stream):
-                    next_type, next_value, _ = self.token_stream[next_idx]  # Unpack all three values
+                    next_type, next_value, _ = self.token_stream[next_idx]
                     if next_type == 'symbol' and next_value == token_value:
                         return None  # Skip single operator if part of compound
                 return token_value
         
+        # Handle basic types and reserved words
         if token_type == 'identifier':
             return 'identifier'
         elif token_type == 'number':
@@ -77,7 +98,7 @@ class PredictiveParser:
             
         return token_value
 
-    def parse(self, tokens: List[Tuple[str, str, int]], source_code: str) -> ParseTreeNode:
+    def parse(self, tokens: List[Tuple[str, str, int]], source_code: str) -> 'ParseTreeNode':
         """Parse the input tokens using the parsing table."""
         self.token_stream = tokens
         self.current_token_idx = 0
@@ -93,6 +114,7 @@ class PredictiveParser:
         # Initialize stack with start symbol and end marker
         stack = deque(['$', 'Start'])
         current_node = self.parse_tree_root
+        node_stack = deque([current_node])  # Keep track of nodes corresponding to stack symbols
         
         while stack and self.current_token_idx < len(self.token_stream):
             top = stack[-1]
@@ -109,10 +131,10 @@ class PredictiveParser:
                 
             if top == terminal:  # Match terminal
                 stack.pop()
+                current_node = node_stack.pop()
                 current_node.token_type = token_type
                 current_node.token_value = token_value
                 self.current_token_idx += 1
-                current_node = current_node.parent
             elif top not in self.parser_tables.grammar:  # Terminal on top, but no match
                 error_message = f"Unexpected token '{token_value}'. Expected {top}"
                 self.error_handler.handle_syntax_error(token_value, top, position)
@@ -126,18 +148,20 @@ class PredictiveParser:
                 if not production:
                     context = self._get_parsing_context(top)
                     error_message = (f"Syntax error at '{token_value}'. "
-                                   f"Expected one of: {', '.join(context)}")
+                                f"Expected one of: {', '.join(context)}")
                     self.error_handler.handle_syntax_error(token_value, context, position)
                     
                 stack.pop()
+                node_stack.pop()  # Remove current non-terminal node from node stack
+                
                 if production != 'ε':
                     symbols = production.split()
+                    # Add symbols to stack in reverse order
                     for symbol in reversed(symbols):
                         stack.append(symbol)
-                        
-                    for symbol in symbols:
                         new_node = ParseTreeNode(symbol, [], current_node)
                         current_node.children.append(new_node)
+                        node_stack.append(new_node)  # Add new node to node stack
                     
                     if current_node.children:
                         current_node = current_node.children[0]

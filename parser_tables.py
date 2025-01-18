@@ -108,23 +108,20 @@ class ParserTables:
         if token_type == 'symbol':
             # Check for '<' to match <LibName> pattern
             if token_value == '<':
-                prev_idx = self.current_token_idx - 1
-                if prev_idx >= 0 and self.token_stream[prev_idx][1] == 'include':
-                    # Look ahead for library name and closing bracket
-                    next_idx = self.current_token_idx + 1
-                    if next_idx < len(self.token_stream) and next_idx + 1 < len(self.token_stream):
-                        lib_token = self.token_stream[next_idx]
-                        close_token = self.token_stream[next_idx + 1]
-                        
-                        # Check if we have a valid library name (iostream or identifier) followed by '>'
-                        is_valid_lib = (
-                            (lib_token[1] == 'iostream') or  # Direct value check for iostream
-                            (lib_token[0] == 'identifier')   # Or any identifier
-                        )
-                        
-                        if is_valid_lib and close_token[0] == 'symbol' and close_token[1] == '>':
-                            self.current_token_idx += 2  # Skip library name and '>'
-                            return '<LibName>'
+                next_idx = self.current_token_idx + 1
+                if next_idx < len(self.token_stream) and next_idx + 1 < len(self.token_stream):
+                    lib_token = self.token_stream[next_idx]
+                    close_token = self.token_stream[next_idx + 1]
+                    
+                    # Check if we have a valid library name (iostream or identifier) followed by '>'
+                    is_valid_lib = (
+                        (lib_token[1] == 'iostream') or  # Direct value check for iostream
+                        (lib_token[0] == 'identifier')   # Or any identifier
+                    )
+                    
+                    if is_valid_lib and close_token[0] == 'symbol' and close_token[1] == '>':
+                        self.current_token_idx += 2  # Skip library name and '>'
+                        return '<LibName>'
             
             # Input/output operators
             if token_value in ['<<', '>>']:
