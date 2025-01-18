@@ -87,15 +87,14 @@ class PredictiveParser:
                 return token_value
         
         # Handle basic types and reserved words
-        if token_type == 'identifier':
-            return 'identifier'
-        elif token_type == 'number':
-            return 'number'
-        elif token_type == 'string':
-            return 'string'
-        elif token_type == 'reservedword':
-            return token_value
+        # Handle strings, numbers and identifiers
+        if token_type in ['string', 'number', 'identifier']:
+            return token_type
             
+        # Handle reserved words
+        if token_type == 'reservedword':
+            return token_value
+        
         return token_value
 
     def parse(self, tokens: List[Tuple[str, str, int]], source_code: str) -> 'ParseTreeNode':

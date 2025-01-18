@@ -59,7 +59,7 @@ class ParserTables:
             'P', 'O', 'W', 'Assign', 'Expression', 'K', 'Loop', 'Input',
             'F', 'Output', 'H', 'C', 'LibName'
         }
-        
+            
         self.grammar = {
             'Start': ['S N M'],
             'S': ['#include <LibName> S', 'ε'],
@@ -67,7 +67,7 @@ class ParserTables:
             'M': ['int main ( ) { T V }'],
             'LibName': ['identifier', 'iostream'],
             'T': ['Id T', 'L T', 'Loop T', 'Input T', 'Output T', 'ε'],
-            'V': ['return 0 ;', 'ε'],
+            'V': ['return number ;', 'ε'],
             'Id': ['int L', 'float L'],
             'L': ['identifier Assign Z'],
             'Z': [', identifier Assign Z', ';'],

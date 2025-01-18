@@ -76,6 +76,9 @@ int main(){
     print("-" * 40)
 
     try:
+        # Initialize error handler
+        error_handler = ErrorHandler()
+
         print("\nPhase 1: Lexical Analysis")
         lexer = LexicalAnalyzer()
         
@@ -171,7 +174,7 @@ int main(){
                 else:
                     print(f"  {identifier:<10} -> Not found")
             
-            # Check syntax
+            # Check syntax using the error handler instance
             if error_handler.check_syntax(token_stream, test_code):
                 print("\nSuccess! All phases completed with no syntax errors.")
             
