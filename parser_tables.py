@@ -18,6 +18,7 @@ class ParserTables:
         # Map token types to their terminal symbols
         self.token_to_terminal = {
             ('reservedword', '#include'): '#include',
+            ('reservedword', '<iostream>'): '<iostream>',
             ('reservedword', 'using'): 'using',
             ('reservedword', 'namespace'): 'namespace',
             ('reservedword', 'std'): 'std',
@@ -44,6 +45,8 @@ class ParserTables:
             ('symbol', '!='): '!=',
             ('symbol', '>>'): '>>',
             ('symbol', '<<'): '<<',
+            ('symbol', '>'): '>',
+            ('symbol', '<'): '<',
             ('identifier', None): 'identifier',
             ('number', None): 'number',
             ('string', None): 'string'
@@ -54,14 +57,15 @@ class ParserTables:
         self.non_terminals = {
             'Start', 'S', 'N', 'M', 'T', 'V', 'Id', 'L', 'Z', 'Operation',
             'P', 'O', 'W', 'Assign', 'Expression', 'K', 'Loop', 'Input',
-            'F', 'Output', 'H', 'C'
+            'F', 'Output', 'H', 'C', 'LibName'
         }
         
         self.grammar = {
             'Start': ['S N M'],
-            'S': ['#include S', 'ε'],
+            'S': ['#include <LibName> S', 'ε'],
             'N': ['using namespace std ;', 'ε'],
             'M': ['int main ( ) { T V }'],
+            'LibName': ['identifier', 'iostream'],
             'T': ['Id T', 'L T', 'Loop T', 'Input T', 'Output T', 'ε'],
             'V': ['return 0 ;', 'ε'],
             'Id': ['int L', 'float L'],
@@ -89,24 +93,65 @@ class ParserTables:
 
     def get_terminal(self, token_type: str, token_value: str) -> str:
         """Convert token to terminal symbol."""
+        # Handle #include as a special case
+        if token_type == 'symbol' and token_value == '#':
+            # Look ahead to check if next token is 'include'
+            next_idx = self.current_token_idx + 1
+            if next_idx < len(self.token_stream):
+                next_type, next_value = self.token_stream[next_idx]
+                if next_type == 'reservedword' and next_value == 'include':
+                    self.current_token_idx += 1  # Skip the include token
+                    return '#include'
+            return None  # Skip '#' if not followed by include
+        
+        # Handle symbols
         if token_type == 'symbol':
-            if token_value == '#':
-                return '#include'
-                
-            if token_value in ['<<', '>>']: # Input/output operators
+            # Angle brackets for includes
+            if token_value in ['<', '>']:
+                # For '<', look ahead to ensure it's not part of '<<'
+                if token_value == '<':
+                    next_idx = self.current_token_idx + 1
+                    if next_idx < len(self.token_stream):
+                        next_type, next_value = self.token_stream[next_idx]
+                        if next_type == 'symbol' and next_value == '<':
+                            return None  # Skip single '<' if part of '<<'
+                # For '>', look ahead to ensure it's not part of '>>'
+                if token_value == '>':
+                    next_idx = self.current_token_idx + 1
+                    if next_idx < len(self.token_stream):
+                        next_type, next_value = self.token_stream[next_idx]
+                        if next_type == 'symbol' and next_value == '>':
+                            return None  # Skip single '>' if part of '>>'
                 return token_value
                 
-            if token_value in ['<=', '>=', '==', '!=']:  # Comparison operators
+            # Input/output operators
+            if token_value in ['<<', '>>']:
                 return token_value
                 
-            return token_value
+            # Comparison operators
+            if token_value in ['<=', '>=', '==', '!=']:
+                return token_value
             
+            # Single operators and other symbols
+            return token_value
+        
+        # Handle reserved words (including iostream)
         if token_type == 'reservedword':
+            if token_value == 'iostream':
+                return 'iostream'  # Special case for iostream library
             return token_value
-            
-        if token_type in ['identifier', 'number', 'string']:
+        
+        # Handle identifiers (including library names), numbers, and strings
+        if token_type == 'identifier':
+            # Check if we're in an include context
+            prev_tokens = self.token_stream[max(0, self.current_token_idx - 2):self.current_token_idx]
+            if any(t[1] == '<' for t in prev_tokens):  # If preceded by '<'
+                return 'identifier'  # Treat as library name
+            return 'identifier'
+        
+        if token_type in ['number', 'string']:
             return token_type
-            
+        
         return token_value
 
     def add_token(self, token_name: str, token_value: str):
@@ -118,7 +163,7 @@ class ParserTables:
             'number': 1,
             'symbol': 2,
             'identifier': 3,
-            'reservedword': 4
+            'reservedword': 4,
         }
         
         insert_pos = 0

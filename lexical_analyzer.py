@@ -17,7 +17,7 @@ class LexicalAnalyzer:
             ('identifier', r'[a-zA-Z][a-zA-Z0-9]*'),
             ('number', r'\d+'),
             ('string', r'"[^"]*"'),
-            # fix the orders becausee of miss undrestanding between < and << or > and >>
+            # Order matters: handle compound operators before single ones
             ('symbol', r'<<|>>|<=|>=|==|!=|\(|\)|\[|\]|,|;|\+|-|\*|/|=|\|\||{|}|<|>'),
             ('whitespace', r'[ \t\n]+')
         ]
@@ -25,7 +25,7 @@ class LexicalAnalyzer:
         # Compile patterns
         self.token_regex = '|'.join(f'(?P<{name}>{pattern})' for name, pattern in self.patterns)
         self.regex = re.compile(self.token_regex)
-
+        
     def tokenize(self, code: str) -> List[Token]:
         tokens = []
         position = 0
@@ -40,14 +40,17 @@ class LexicalAnalyzer:
             token_value = match.group()
 
             if token_type != 'whitespace':
-                if token_type == 'string':
-                    # Keep the quotes in the token value
-                    tokens.append(Token('string', token_value))
+                # Keep original token type for library names
+                if token_type == 'identifier' or token_type == 'reservedword':
+                    if token_value == 'iostream':
+                        tokens.append(Token('reservedword', token_value))
+                    else:
+                        tokens.append(Token(token_type, token_value))
                 else:
                     tokens.append(Token(token_type, token_value))
 
         return tokens
-
+    
 def main():
 
     test_code = """#include <iostream>
