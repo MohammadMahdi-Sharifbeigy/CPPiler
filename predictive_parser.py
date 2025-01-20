@@ -298,18 +298,41 @@ class ErrorHandler:
         """Check for basic syntax errors in the token stream."""
         self.initialize_source(source_code)
         last_token = None
+        in_statement = False
         
         for token_type, token_value, position in token_stream:
             if last_token:
                 last_type, last_value, last_pos = last_token
                 
-                if (last_type in ['identifier', 'number'] and 
-                    token_value != ';' and token_value != ','):
-                    self.handle_missing_semicolon(last_pos)
+                # Start of a new statement
+                if last_value in [';', '{', '}']:
+                    in_statement = False
+                
+                # Check for missing semicolon
+                if in_statement and last_type in ['identifier', 'number']:
+                    # Allow these tokens after identifier/number
+                    allowed_follows = {
+                        ';',  # End of statement
+                        ',',  # List continuation
+                        '=',  # Assignment
+                        '+', '-', '*', '/', # Arithmetic operators  
+                        '>=', '<=', '==', '!=', # Comparison operators
+                        ')', ']',  # Closing brackets
+                        '<<', '>>'  # Stream operators
+                    }
                     
-                if (token_value == '=' and 
-                    last_type not in ['identifier', 'reservedword']):
+                    if token_value not in allowed_follows:
+                        self.handle_missing_semicolon(last_pos)
+                
+                # Check for invalid assignment
+                if token_value == '=' and last_type not in ['identifier']:
                     self.handle_invalid_assignment(position)
+                
+                # Track statement context
+                if token_value in ['(', '{']:
+                    in_statement = False
+                elif token_value not in [';', '}']:
+                    in_statement = True
             
             last_token = (token_type, token_value, position)
             
