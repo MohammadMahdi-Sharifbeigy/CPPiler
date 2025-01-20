@@ -327,23 +327,56 @@ class TreeSearcher:
         
     def find_identifier_definition(self, identifier: str) -> Optional[str]:
         """Find the first definition of an identifier in the parse tree."""
+        def get_var_type(node: ParseTreeNode) -> Optional[str]:
+            """Get variable type from Id node."""
+            current = node
+            while current and current.value != 'Id':
+                current = current.parent
+            if current and current.children:
+                for child in current.children:
+                    if child.token_type == 'reservedword':
+                        return child.token_value
+            return None
+
         def dfs(node: ParseTreeNode) -> Optional[str]:
-            if (node.value == 'identifier' and node.token_value == identifier):
-                current = node
-                definition = []
-                while current and current.value != 'T':
-                    if current.token_value:
-                        definition.insert(0, current.token_value)
-                    else:
-                        definition.insert(0, current.value)
-                    current = current.parent
-                return " ".join(definition)
+            if node.value == 'L':
+                # Check direct identifier in L
+                for child in node.children:
+                    if (child.value == 'identifier' and 
+                        child.token_value == identifier):
+                        var_type = get_var_type(node)
+                        if var_type:
+                            return var_type
+                
+                # Check identifiers in comma-separated list (Z node)
+                z_node = next((child for child in node.children if child.value == 'Z'), None)
+                if z_node:
+                    current = z_node
+                    while current and current.value == 'Z':
+                        # Check identifier before comma
+                        id_node = next((child for child in current.parent.children 
+                                      if child.value == 'identifier' and 
+                                      child.token_value == identifier), None)
+                        if id_node:
+                            var_type = get_var_type(node)
+                            if var_type:
+                                return var_type
+                            
+                        # Move to next part after comma
+                        comma_list = next((child for child in current.children 
+                                         if child.value == 'Z'), None)
+                        if comma_list:
+                            current = comma_list
+                        else:
+                            break
             
+            # Continue searching in children
             for child in node.children:
                 result = dfs(child)
                 if result:
                     return result
-            
+                    
             return None
         
-        return dfs(self.root)
+        result = dfs(self.root)
+        return result if result else "Not found"
