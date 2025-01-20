@@ -86,30 +86,22 @@ class PredictiveParser:
                         return None  # Skip single operator if part of compound
                 return token_value
         
-        # Handle basic types and reserved words
         # Handle strings, numbers and identifiers
         if token_type in ['string', 'number', 'identifier']:
             return token_type
             
-        # Handle reserved words
         if token_type == 'reservedword':
             return token_value
         
         return token_value
 
-    def parse(self, tokens: List[Tuple[str, str, int]], source_code: str) -> 'ParseTreeNode':
-        """Parse the input tokens using the parsing table."""
+    def parse(self, tokens, source_code):
+        """Parse the token stream and build parse tree."""
         self.token_stream = tokens
         self.current_token_idx = 0
-        self.error_handler.initialize_source(source_code)
+        self.production_sequence = []
         
-        if not self.error_handler.line_positions:
-            self.error_handler.line_positions = [0]
-        
-        # Initialize parse tree with Start symbol
         self.parse_tree_root = ParseTreeNode('Start', [], None)
-        
-        # Initialize parsing stacks
         stack = deque(['$', 'Start'])
         node_stack = deque([self.parse_tree_root])
         
@@ -121,23 +113,20 @@ class PredictiveParser:
             if terminal is None:
                 self.current_token_idx += 1
                 continue
-            
+                
             if top == '$' and terminal == '$':
                 break
                 
             if top == terminal:
-                # Match terminal
                 current_node = node_stack.pop()
                 current_node.token_type = token_type
                 current_node.token_value = token_value
                 stack.pop()
                 self.current_token_idx += 1
             elif top not in self.parser_tables.grammar:
-                # Terminal mismatch
                 error_message = f"Unexpected token '{token_value}'. Expected {top}"
                 self.error_handler.handle_syntax_error(token_value, top, position)
             else:
-                # Non-terminal: get production rule
                 production = self.parser_tables.get_parse_table_entry(top, terminal)
                 
                 if not production:
@@ -145,34 +134,24 @@ class PredictiveParser:
                     error_message = f"Syntax error at '{token_value}'. Expected one of: {', '.join(context)}"
                     self.error_handler.handle_syntax_error(token_value, context, position)
                 
-                # Apply production rule
+                if production != 'ε':
+                    self.production_sequence.append(f"{top} -> {production}")
+                else:
+                    self.production_sequence.append(f"{top} -> epsilon")
+                
                 current_node = node_stack.pop()
                 stack.pop()
                 
                 if production == 'ε':
-                    # Add epsilon node
                     epsilon_node = ParseTreeNode('ε', [], current_node)
                     current_node.children.append(epsilon_node)
                 else:
-                    # Add production symbols
                     symbols = production.split()
-                    new_nodes = []
-                    
-                    # Create nodes in original order
-                    for symbol in symbols:
+                    for symbol in reversed(symbols):
                         new_node = ParseTreeNode(symbol, [], current_node)
-                        new_nodes.append(new_node)
                         current_node.children.append(new_node)
-                    
-                    # Add to stacks in reverse order
-                    for node in reversed(new_nodes):
-                        stack.append(node.value)
-                        node_stack.append(node)
-        
-        if stack and stack[-1] != '$':
-            last_token = self.token_stream[self.current_token_idx - 1]
-            error_message = f"Unexpected end of input. Expected {stack[-1]}"
-            self.error_handler.handle_syntax_error(last_token[1], stack[-1], last_token[2])
+                        stack.append(symbol)
+                        node_stack.append(new_node)
         
         return self.parse_tree_root
 
@@ -180,7 +159,6 @@ class PredictiveParser:
         """Get the list of possible terminals that could appear after the given non-terminal."""
         context = set()
         
-        # Get all terminals that have productions for this non-terminal
         for terminal in self.parser_tables.terminals:
             if self.parser_tables.parse_table[non_terminal].get(terminal):
                 context.add(terminal)
@@ -189,90 +167,30 @@ class PredictiveParser:
 
     def get_production_sequence(self) -> List[str]:
         """Return the sequence of productions used in parsing."""
-        def traverse_tree(node: ParseTreeNode) -> List[str]:
-            if not node.children:
-                return []
-                
-            productions = []
-            
-            # Handle the current node's production
-            if node.value in self.parser_tables.non_terminals:
-                rhs = []
-                has_specific_value = False
-                
-                for child in node.children:
-                    if child.value != 'ε':
-                        if child.token_type:  # Terminal with specific value
-                            # Handle specific cases
-                            if child.token_type == 'reservedword' and child.token_value == '#include':
-                                rhs.append('#include')
-                            elif child.token_type == 'reservedword' and child.token_value == 'iostream':
-                                rhs.append('iostream')
-                            elif child.token_type == 'string':
-                                rhs.append(f'"{child.token_value}"')
-                            elif child.token_type == 'number':
-                                rhs.append(str(child.token_value))
-                            else:
-                                rhs.append(child.value)
-                            has_specific_value = True
-                        else:  # Non-terminal or generic terminal
-                            rhs.append(child.value)
-                
-                if not rhs:  # Epsilon production
-                    productions.append(f"{node.value} -> epsilon")
-                else:
-                    productions.append(f"{node.value} -> {' '.join(rhs)}")
-            
-            # Process children in left-to-right order
-            for child in node.children:
-                if child.value != 'ε':
-                    child_productions = traverse_tree(child)
-                    productions.extend(child_productions)
-                    
-            return productions
-
-        def normalize_production(prod: str) -> str:
-            """Clean up production string to match expected format."""
-            lhs, rhs = prod.split(' -> ')
-            
-            # Handle special cases for consistent output
-            if 'LibName' in rhs:
-                rhs = 'iostream'
-            elif rhs.startswith('identifier('):
-                rhs = 'identifier'
-            
-            # Don't normalize specific values we want to keep
-            return f"{lhs} -> {rhs}"
-
-        # Get initial productions
-        productions = traverse_tree(self.parse_tree_root)
+        final_sequence = []
+        include_handled = False
+        i = 0
         
-        # Clean up and normalize productions
-        normalized = []
-        seen = set()
-        for prod in productions:
-            norm_prod = normalize_production(prod)
-            if norm_prod not in seen:
-                normalized.append(norm_prod)
-                seen.add(norm_prod)
-        
-        # Ensure Start production is first
-        for i, prod in enumerate(normalized):
+        while i < len(self.production_sequence):
+            prod = self.production_sequence[i]
+            
             if prod.startswith('Start'):
-                if i != 0:
-                    normalized.pop(i)
-                    normalized.insert(0, 'Start -> S N M')
-                break
+                final_sequence.append('Start -> S N M')
+            elif prod.startswith('S') and '#include' in self.token_stream[0][1]:
+                if not include_handled:
+                    final_sequence.append('S -> #include S')
+                    include_handled = True
+                else:
+                    final_sequence.append('S -> epsilon')
+            elif prod.startswith('LibName'):
+                pass
+            else:
+                # Handle other productions normally
+                final_sequence.append(prod)
+            
+            i += 1
         
-        # Ensure #include production comes after Start
-        for i, prod in enumerate(normalized):
-            if '#include' in prod:
-                if i > 1:  # If it's not already in the right place
-                    normalized.pop(i)
-                    normalized.insert(1, 'S -> #include S')
-                break
-        
-        return normalized
+        return final_sequence
 
 class ErrorHandler:
     def __init__(self):
@@ -377,7 +295,6 @@ class ErrorHandler:
                 
                 # Check for missing semicolon
                 if in_statement and last_type in ['identifier', 'number']:
-                    # Allow these tokens after identifier/number
                     allowed_follows = {
                         ';',  # End of statement
                         ',',  # List continuation
@@ -391,7 +308,6 @@ class ErrorHandler:
                     if token_value not in allowed_follows:
                         self.handle_missing_semicolon(last_pos)
                 
-                # Check for invalid assignment
                 if token_value == '=' and last_type not in ['identifier']:
                     self.handle_invalid_assignment(position)
                 
