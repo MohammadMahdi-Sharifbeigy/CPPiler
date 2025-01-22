@@ -6,9 +6,12 @@ from dataclasses import dataclass
 class Token:
     name: str
     value: str
+    position: int = 0
+    line: int = 1
+    column: int = 1
 
     def __repr__(self):
-        return f"[{self.name}, {self.value}]"
+        return f"[{self.name}, {self.value}, pos={self.position}, ln={self.line}, col={self.column}]"
 
 class LexicalAnalyzer:
     def __init__(self):
@@ -29,43 +32,64 @@ class LexicalAnalyzer:
     def tokenize(self, code: str) -> List[Token]:
         tokens = []
         position = 0
-
+        line = 1
+        column = 1
+        print("\nDEBUG Lexical Analysis:")
+        
         while position < len(code):
             match = self.regex.match(code, position)
             if match is None:
                 raise ValueError(f"Invalid token at position {position}")
 
-            position = match.end()
             token_type = match.lastgroup
             token_value = match.group()
-
-            if token_type != 'whitespace':
-                # Keep original token type for library names
-                if token_type == 'identifier' or token_type == 'reservedword':
-                    if token_value == 'iostream':
-                        tokens.append(Token('reservedword', token_value))
+            token_start = position  # Save start position before updating
+            
+            # Handle whitespace
+            if token_type == 'whitespace':
+                for char in token_value:
+                    if char == '\n':
+                        line += 1
+                        column = 1
+                        position += 1
                     else:
-                        tokens.append(Token(token_type, token_value))
+                        column += 1
+                        position += 1
+                continue
+
+            # Create token with position info
+            if token_type == 'identifier' or token_type == 'reservedword':
+                if token_value == 'iostream':
+                    token = Token('reservedword', token_value, position, line, column)
                 else:
-                    tokens.append(Token(token_type, token_value))
+                    token = Token(token_type, token_value, position, line, column)
+                tokens.append(token)
+                print(f"Token: {token}")
+            else:
+                token = Token(token_type, token_value, position, line, column)
+                tokens.append(token)
+                print(f"Token: {token}")
+
+            # Update position and column
+            position = match.end()
+            column += len(token_value)
 
         return tokens
     
 def main():
-
     test_code = """#include <iostream>
-                    using namespace std;
-                    int main(){
-                        int x;
-                        int s=0, t=10;
-                        while (t >= 0){
-                            cin>>x;
-                            t = t - 1;
-                            s = s + x;
-                        }
-                        cout<<"sum="<<s;
-                        return 0;
-                    }"""
+using namespace std;
+int main(){
+    int x;
+    int s=0, t=10;
+    while (t >= 0){
+        cin>>x;
+        t = t - 1;
+        s = s + x;
+    }
+    cout"sum="<<s;
+    return 0;
+}"""
 
     analyzer = LexicalAnalyzer()
     try:

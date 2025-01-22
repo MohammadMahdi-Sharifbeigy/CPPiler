@@ -63,7 +63,7 @@ int main(){
     while (t >= 0){
         cin>>x;
         t = t - 1;
-        s = s + x
+        s = s + x;
     }
     cout<<"sum="<<s;
     return 0;
@@ -146,11 +146,7 @@ int main(){
         parser = PredictiveParser(parser_tables)
         
         current_pos = 0
-        token_stream = []
-        for token in tokens:
-            token_stream.append((token.name, token.value, current_pos))
-            current_pos += len(token.value) + 1
-        token_stream.append(('$', '$', current_pos))
+        token_stream = tokens
         
         try:
             # Parse tokens and initialize error handler with source code
