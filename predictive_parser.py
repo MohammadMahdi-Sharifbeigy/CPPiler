@@ -209,7 +209,6 @@ class ErrorHandler:
         for i, char in enumerate(source_code):
             if char == '\n':
                 self.line_positions.append(i + 1)
-        # Add final position if not ending with newline
         if not source_code.endswith('\n'):
             self.line_positions.append(len(source_code))
 
@@ -250,23 +249,36 @@ class ErrorHandler:
                
         return self.source_code[start:end].rstrip('\n')
 
+    def find_last_token_position(self, line_content: str) -> int:
+        """Find the position of the last non-whitespace character in the line."""
+        trimmed = line_content.rstrip()
+        return len(trimmed) if trimmed else 0
+
     def handle_syntax_error(self, token_value: str, expected_value: str, position: int):
         """Handle syntax error with detailed information."""
-        if isinstance(expected_value, list):
+        message = ""
+        if token_value == '}' and isinstance(expected_value, list) and ';' in expected_value:
+            message = "Syntax Error: Missing semicolon at end of statement"
+        elif isinstance(expected_value, list):
             message = f"Syntax Error: Unexpected '{token_value}'. Expected one of: {', '.join(expected_value)}"
         else:
             message = f"Syntax Error: Expected '{expected_value}', found '{token_value}'"
             
-        error_msg = self.format_error(position, message)
+        error_msg = self.format_error(position, message, is_missing_semicolon=';' in str(expected_value))
         raise SyntaxError(error_msg)
 
-    def format_error(self, position: int, message: str) -> str:
+    def format_error(self, position: int, message: str, is_missing_semicolon: bool = False) -> str:
         """Format error message with line number, column number, and context."""
-        # Ensure position is valid
         position = max(0, min(position, len(self.source_code) if self.source_code else 0))
         
         line_number = self.get_line_number(position)
-        column = self.get_column_number(position)
+        line_content = self.get_line_content(line_number)
+        
+        # For missing semicolon errors, point to the end of the line
+        if is_missing_semicolon:
+            column = self.find_last_token_position(line_content) + 1
+        else:
+            column = self.get_column_number(position)
         
         error_msg = [
             f"\nError at line {line_number}, column {column}:",
@@ -285,9 +297,23 @@ class ErrorHandler:
             prefix = "-> " if i == line_number else "   "
             error_msg.append(f"{prefix}{i:4d} | {line_text}")
             if i == line_number:
-                error_msg.append("      " + " " * (column - 1) + "^")
+                # Place the pointer at the correct position
+                pointer_pos = column - 1
+                error_msg.append("      " + " " * pointer_pos + "^")
                 
         return "\n".join(error_msg)
+
+    def handle_missing_semicolon(self, position: int):
+        """Handle missing semicolon error."""
+        message = "Syntax Error: Missing semicolon at end of statement"
+        error_msg = self.format_error(position, message, is_missing_semicolon=True)
+        raise SyntaxError(error_msg)
+
+    def handle_invalid_assignment(self, position: int):
+        """Handle invalid assignment error."""
+        message = "Syntax Error: Invalid left-hand side in assignment"
+        error_msg = self.format_error(position, message)
+        raise SyntaxError(error_msg)
 
     def check_syntax(self, token_stream, source_code: str) -> bool:
         """Check for basic syntax errors in the token stream."""
@@ -330,6 +356,7 @@ class ErrorHandler:
             last_token = (token_type, token_value, position)
             
         return True
+    
 class TreeSearcher:
     def __init__(self, parse_tree_root: ParseTreeNode):
         self.root = parse_tree_root
