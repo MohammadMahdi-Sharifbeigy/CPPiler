@@ -63,7 +63,7 @@ int main(){
     while (t >= 0){
         cin>>x;
         t = t - 1;
-        s = s + x;
+        s = s + x
     }
     cout<<"sum="<<s;
     return 0;

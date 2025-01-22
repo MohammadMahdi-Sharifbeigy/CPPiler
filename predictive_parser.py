@@ -100,6 +100,8 @@ class PredictiveParser:
         self.token_stream = tokens
         self.current_token_idx = 0
         self.production_sequence = []
+
+        self.error_handler.initialize_source(source_code)
         
         self.parse_tree_root = ParseTreeNode('Start', [], None)
         stack = deque(['$', 'Start'])
@@ -196,7 +198,7 @@ class ErrorHandler:
     def __init__(self):
         self.errors = []
         self.source_code = ""
-        self.line_positions = []
+        self.line_positions = [0]
         self.current_position = 0
 
     def initialize_source(self, source_code: str):
@@ -207,23 +209,38 @@ class ErrorHandler:
         for i, char in enumerate(source_code):
             if char == '\n':
                 self.line_positions.append(i + 1)
-                
+        # Add final position if not ending with newline
+        if not source_code.endswith('\n'):
+            self.line_positions.append(len(source_code))
+
     def get_line_number(self, position: int) -> int:
         """Get line number for a given position in the source."""
-        for line_num, start_pos in enumerate(self.line_positions, 1):
+        if not self.line_positions:
+            return 1
+            
+        for i, start_pos in enumerate(self.line_positions):
             if position < start_pos:
-                return line_num - 1
+                return max(1, i)
         return len(self.line_positions)
-        
+
     def get_column_number(self, position: int) -> int:
         """Get column number for a given position in the source."""
+        if not self.line_positions:
+            return position + 1
+            
         line_num = self.get_line_number(position)
+        if line_num <= 0 or line_num > len(self.line_positions):
+            return 1
+            
         line_start = self.line_positions[line_num - 1]
         return position - line_start + 1
 
     def get_line_content(self, line_number: int) -> str:
         """Get the content of a specific line."""
-        if line_number < 1 or line_number > len(self.line_positions):
+        if not self.source_code or line_number < 1:
+            return ""
+            
+        if line_number > len(self.line_positions):
             return ""
             
         start = self.line_positions[line_number - 1]
@@ -245,9 +262,11 @@ class ErrorHandler:
 
     def format_error(self, position: int, message: str) -> str:
         """Format error message with line number, column number, and context."""
+        # Ensure position is valid
+        position = max(0, min(position, len(self.source_code) if self.source_code else 0))
+        
         line_number = self.get_line_number(position)
         column = self.get_column_number(position)
-        line_content = self.get_line_content(line_number)
         
         error_msg = [
             f"\nError at line {line_number}, column {column}:",
@@ -255,29 +274,20 @@ class ErrorHandler:
             "\nContext:",
         ]
         
+        # Show context lines
         start_line = max(1, line_number - 2)
         end_line = min(len(self.line_positions), line_number + 2)
         
         for i in range(start_line, end_line + 1):
             line_text = self.get_line_content(i)
+            if not line_text and i > 1:  # Skip empty lines after the first line
+                continue
             prefix = "-> " if i == line_number else "   "
             error_msg.append(f"{prefix}{i:4d} | {line_text}")
             if i == line_number:
                 error_msg.append("      " + " " * (column - 1) + "^")
                 
         return "\n".join(error_msg)
-
-    def handle_missing_semicolon(self, position: int):
-        """Handle missing semicolon error."""
-        message = "Missing semicolon at end of statement"
-        error_msg = self.format_error(position, message)
-        raise SyntaxError(error_msg)
-
-    def handle_invalid_assignment(self, position: int):
-        """Handle invalid assignment error."""
-        message = "Invalid left-hand side in assignment"
-        error_msg = self.format_error(position, message)
-        raise SyntaxError(error_msg)
 
     def check_syntax(self, token_stream, source_code: str) -> bool:
         """Check for basic syntax errors in the token stream."""
@@ -320,7 +330,6 @@ class ErrorHandler:
             last_token = (token_type, token_value, position)
             
         return True
-
 class TreeSearcher:
     def __init__(self, parse_tree_root: ParseTreeNode):
         self.root = parse_tree_root
