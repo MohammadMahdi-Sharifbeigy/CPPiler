@@ -15,7 +15,6 @@ class ParserTables:
         self.first_sets: Dict[str, Set[str]] = {}
         self.follow_sets: Dict[str, Set[str]] = {}
         
-        # Map token types to their terminal symbols
         self.token_to_terminal = {
             ('reservedword', '#include'): '#include',
             ('symbol', '<'): '<',
@@ -123,22 +122,17 @@ class ParserTables:
                         self.current_token_idx += 2  # Skip library name and '>'
                         return '<LibName>'
             
-            # Input/output operators
             if token_value in ['<<', '>>']:
                 return token_value
             
-            # Comparison operators
             if token_value in ['<=', '>=', '==', '!=']:
                 return token_value
             
-            # Other symbols
             return token_value
         
-        # Handle reserved words
         if token_type == 'reservedword':
             return token_value
         
-        # Handle identifiers, numbers, and strings
         if token_type in ['identifier', 'number', 'string']:
             return token_type
         

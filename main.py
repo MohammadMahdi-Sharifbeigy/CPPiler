@@ -5,7 +5,6 @@ from tabulate import tabulate
 import sys
 
 def print_parse_table(parse_table, terminals, non_terminals):
-    """Print parse table in a clear, readable format."""
     print("\n=== Parse Table ===\n")
     
     # Filter out unused terminals
@@ -32,7 +31,6 @@ def print_parse_table(parse_table, terminals, non_terminals):
         print()
 
 def print_token_table(token_table):
-    """Print token table in a simple list format."""
     print("\n=== Token Table ===\n")
     
     current_type = None
@@ -43,13 +41,11 @@ def print_token_table(token_table):
         print(f"  {entry.token_value:<20} (hash: {entry.hash_value})")
 
 def print_productions(productions):
-    """Print production sequence in a clear format."""
     print("\n=== Production Sequence ===\n")
     for i, prod in enumerate(productions, 1):
         print(f"{i:3}. {prod}")
 
 def print_identifier_table(identifiers):
-    """Print identifier definitions in a clear format."""
     print("\nIdentifier Definitions:")
     for identifier, definition in identifiers:
         print(f"  {identifier:<10} -> {definition}")
@@ -76,7 +72,6 @@ int main(){
     print("-" * 40)
 
     try:
-        # Initialize error handler
         error_handler = ErrorHandler()
 
         print("\nPhase 1: Lexical Analysis")
@@ -149,7 +144,6 @@ int main(){
         token_stream = tokens
         
         try:
-            # Parse tokens and initialize error handler with source code
             parse_tree = parser.parse(token_stream, test_code)
             productions = parser.get_production_sequence()
             
@@ -159,7 +153,6 @@ int main(){
             
             print("\n=== Extra Features ===")
             
-            # Tree Search
             tree_searcher = TreeSearcher(parse_tree)
             test_identifiers = ['x', 's', 't']
             print("\nIdentifier Definitions:")
@@ -170,7 +163,6 @@ int main(){
                 else:
                     print(f"  {identifier:<10} -> Not found")
             
-            # Check syntax using the error handler instance
             if error_handler.check_syntax(token_stream, test_code):
                 print("\nSuccess! All phases completed with no syntax errors.")
             

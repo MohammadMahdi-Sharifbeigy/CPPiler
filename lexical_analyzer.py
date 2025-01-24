@@ -45,7 +45,6 @@ class LexicalAnalyzer:
             token_value = match.group()
             token_start = position  # Save start position before updating
             
-            # Handle whitespace
             if token_type == 'whitespace':
                 for char in token_value:
                     if char == '\n':
@@ -57,20 +56,16 @@ class LexicalAnalyzer:
                         position += 1
                 continue
 
-            # Create token with position info
             if token_type == 'identifier' or token_type == 'reservedword':
                 if token_value == 'iostream':
                     token = Token('reservedword', token_value, position, line, column)
                 else:
                     token = Token(token_type, token_value, position, line, column)
                 tokens.append(token)
-                print(f"Token: {token}")
             else:
                 token = Token(token_type, token_value, position, line, column)
                 tokens.append(token)
-                print(f"Token: {token}")
 
-            # Update position and column
             position = match.end()
             column += len(token_value)
 
