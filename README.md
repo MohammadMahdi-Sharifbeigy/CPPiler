@@ -230,8 +230,6 @@ python main.py
 - Support `if` statements and arithmetic expressions.  
 - Expand error recovery for missing braces/semicolons.  
 ``` 
-
-
 This README provides:  
 ✅ Complete workflow documentation  
 ✅ Code snippets for critical components  
