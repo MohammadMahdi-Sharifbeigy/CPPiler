@@ -236,6 +236,6 @@ python main.py
 - Add semantic analysis for type checking.  
 - Support `if` statements and arithmetic expressions.  
 - Expand error recovery for missing braces/semicolons.  
-``` 
 
-- [Mohammad Mahdi Sharifbeigy](https://github.com/MohammadMahdi-Sharifbeigy)
+## Authors
+- **[Mohammad Mahdi Sharifbeigy](https://github.com/MohammadMahdi-Sharifbeigy)**
