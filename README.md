@@ -4,6 +4,13 @@
 
 This project implements a lexical analyzer and predictive parser for a subset of C++ syntax. It consists of four core components that work together to analyze code structure, detect syntax errors, and build parse trees.
 
+This README provides:  
+✅ Complete workflow documentation  
+✅ Code snippets for critical components  
+✅ Error examples with visual context  
+✅ Grammar feature matrix  
+✅ Limitations and future scope
+
 ---
 
 ## File Structure
@@ -230,10 +237,5 @@ python main.py
 - Support `if` statements and arithmetic expressions.  
 - Expand error recovery for missing braces/semicolons.  
 ``` 
-This README provides:  
-✅ Complete workflow documentation  
-✅ Code snippets for critical components  
-✅ Error examples with visual context  
-✅ Clear setup instructions  
-✅ Grammar feature matrix  
-✅ Limitations and future scope
+
+- [Mohammad Mahdi Sharifbeigy](https://github.com/MohammadMahdi-Sharifbeigy)
