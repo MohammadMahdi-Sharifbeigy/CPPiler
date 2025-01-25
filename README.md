@@ -8,7 +8,7 @@ This project implements a lexical analyzer and predictive parser for a subset of
 
 ## File Structure
 
-### 1. lexical_analyzer.py
+### 1. 📜 lexical_analyzer.py
 
 **Purpose**: Tokenizes input source code into lexical tokens.
 
@@ -43,7 +43,7 @@ This project implements a lexical analyzer and predictive parser for a subset of
 
 ---
 
-### 2. parser_tables.py
+### 2. 📊 parser_tables.py
 
 **Purpose**: Manages grammar rules and constructs parsing tables.
 
@@ -76,7 +76,7 @@ This project implements a lexical analyzer and predictive parser for a subset of
 
 ---
 
-### 3. predictive_parser.py
+### 3. 🧠 predictive_parser.py
 
 **Purpose**: Implements syntax analysis using parse tables.
 
@@ -116,7 +116,7 @@ This project implements a lexical analyzer and predictive parser for a subset of
 
 ---
 
-### 4. main.py
+### 4. 🚀 main.py
 
 **Purpose**: Orchestrates compilation process and displays results.
 
@@ -207,18 +207,35 @@ python main.py
 
 ---
 
-## Grammar Notes
+## Grammar Specifications
+| Feature               | Support                              | Example                   |
+|-----------------------|--------------------------------------|---------------------------|
+| **Data Types**        | `int`, `float`                       | `int x = 5;`              |
+| **Control Flow**      | `while` loops                        | `while (t >= 0) { ... }`  |
+| **I/O Operations**    | `cin >>`, `cout <<`                  | `cin >> x; cout << s;`    |
+| **Variables**         | Comma-separated declarations         | `int s=0, t=10;`          |
+| **Error Recovery**    | Context-aware suggestions            | Highlights missing tokens |
 
-- **LL(1) Compliant**: No left recursion, deterministic productions
-- **Supported Constructs**:
-  - Variable declarations
-  - Arithmetic operations
-  - While loops
-  - Console I/O
-  - Return statements
-- **Limitations**:
-  - No function definitions (except main)
-  - No class/struct support
-  - Limited type system (int/float only)
+---
 
-This implementation demonstrates core compiler construction techniques while handling real C++ syntax patterns with robust error diagnostics.
+## Limitations
+- No support for functions (except `main`).  
+- Limited type system (no strings beyond `cout` usage).  
+- Basic error recovery (no semantic analysis).  
+
+---
+
+## Future Improvements
+- Add semantic analysis for type checking.  
+- Support `if` statements and arithmetic expressions.  
+- Expand error recovery for missing braces/semicolons.  
+``` 
+
+
+This README provides:  
+✅ Complete workflow documentation  
+✅ Code snippets for critical components  
+✅ Error examples with visual context  
+✅ Clear setup instructions  
+✅ Grammar feature matrix  
+✅ Limitations and future scope
