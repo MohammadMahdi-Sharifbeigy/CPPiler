@@ -9,6 +9,7 @@ class ParseTreeNode:
     parent: Optional['ParseTreeNode'] = None
     token_type: Optional[str] = None
     token_value: Optional[str] = None
+    init_value: Optional[str] = None
 
 class PredictiveParser:
     def __init__(self, parser_tables):
@@ -95,12 +96,30 @@ class PredictiveParser:
                 current_node = node_stack.pop()
                 current_node.token_type = current_token.name
                 current_node.token_value = current_token.value
+
+                # Handle identifier initialization
+                if current_token.name == 'identifier':
+                    # Look ahead for initialization
+                    look_ahead = self.current_token_idx + 1
+                    while look_ahead < len(self.token_stream):
+                        next_token = self.token_stream[look_ahead]
+                        if next_token.value == '=':
+                            # Found assignment, look for the value
+                            if look_ahead + 1 < len(self.token_stream):
+                                value_token = self.token_stream[look_ahead + 1]
+                                if value_token.name in ['number', 'identifier']:
+                                    current_node.init_value = value_token.value
+                            break
+                        elif next_token.value in [';', ',']:
+                            break
+                        look_ahead += 1
+                
                 stack.pop()
                 self.current_token_idx += 1
             elif top not in self.parser_tables.grammar:
                 self.error_handler.handle_syntax_error(
-                    current_token.value, 
-                    top, 
+                    current_token.value,
+                    top,
                     current_token.position
                 )
             else:
@@ -290,58 +309,88 @@ class TreeSearcher:
     def __init__(self, parse_tree_root: ParseTreeNode):
         self.root = parse_tree_root
         
-    def find_identifier_definition(self, identifier: str) -> Optional[str]:
-        """Find the first definition of an identifier in the parse tree."""
-        def get_var_type(node: ParseTreeNode) -> Optional[str]:
-            """Get variable type from Id node."""
-            current = node
-            while current and current.value != 'Id':
-                current = current.parent
-            if current and current.children:
-                for child in current.children:
-                    if child.token_type == 'reservedword':
-                        return child.token_value
-            return None
-
-        def dfs(node: ParseTreeNode) -> Optional[str]:
-            if node.value == 'L':
-                # Check direct identifier in L
-                for child in node.children:
-                    if (child.value == 'identifier' and 
-                        child.token_value == identifier):
-                        var_type = get_var_type(node)
-                        if var_type:
-                            return var_type
-                
-                # Check identifiers in comma-separated list (Z node)
-                z_node = next((child for child in node.children if child.value == 'Z'), None)
-                if z_node:
-                    current = z_node
-                    while current and current.value == 'Z':
-                        # Check identifier before comma
-                        id_node = next((child for child in current.parent.children 
-                                      if child.value == 'identifier' and 
-                                      child.token_value == identifier), None)
-                        if id_node:
-                            var_type = get_var_type(node)
-                            if var_type:
-                                return var_type
-                            
-                        # Move to next part after comma
-                        comma_list = next((child for child in current.children 
-                                         if child.value == 'Z'), None)
-                        if comma_list:
-                            current = comma_list
-                        else:
-                            break
-            
-            # Continue searching in children
+    def search_node(self, node: ParseTreeNode, identifier: str) -> Optional[str]:
+        """
+        Recursively search through the parse tree for identifier definitions.
+        Returns the type and initialization value if found.
+        """
+        if node.value == 'L':
+            # Check direct identifier in L
             for child in node.children:
-                result = dfs(child)
-                if result:
-                    return result
-                    
-            return None
+                if (child.value == 'identifier' and 
+                    child.token_value == identifier):
+                    var_type = self.get_var_type(child)
+                    init_value = self.get_init_value(child)
+                    if var_type:
+                        return f"{var_type}{' = ' + init_value if init_value else ''}"
+            
+            # Check identifiers in comma-separated list (Z node)
+            z_node = next((child for child in node.children if child.value == 'Z'), None)
+            if z_node:
+                current = z_node
+                while current and current.value == 'Z':
+                    # Check identifier before comma
+                    id_node = next((child for child in current.parent.children 
+                                  if child.value == 'identifier' and 
+                                  child.token_value == identifier), None)
+                    if id_node:
+                        var_type = self.get_var_type(id_node)
+                        init_value = self.get_init_value(id_node)
+                        if var_type:
+                            return f"{var_type}{' = ' + init_value if init_value else ''}"
+                        
+                    # Move to next part after comma
+                    comma_list = next((child for child in current.children 
+                                     if child.value == 'Z'), None)
+                    if comma_list:
+                        current = comma_list
+                    else:
+                        break
         
-        result = dfs(self.root)
+        # Continue searching in children
+        for child in node.children:
+            result = self.search_node(child, identifier)
+            if result:
+                return result
+                
+        return None
+
+    def get_var_type(self, node: ParseTreeNode) -> Optional[str]:
+        """Get variable type from Id node."""
+        current = node
+        while current and current.value != 'Id':
+            current = current.parent
+        if current and current.children:
+            for child in current.children:
+                if child.token_type == 'reservedword':
+                    return child.token_value
+        return None
+
+    def get_init_value(self, node: ParseTreeNode) -> Optional[str]:
+        """Get initialization value directly from node or from parse tree."""
+        # First check if the node has an init_value
+        if node.init_value is not None:
+            return node.init_value
+
+        # If not, check the parse tree structure
+        current = node
+        while current:
+            if current.value == 'Assign':
+                for child in current.children:
+                    if child.value == 'Operation':
+                        def find_first_value(n):
+                            if n.token_type in ['number', 'identifier']:
+                                return n.token_value
+                            for c in n.children:
+                                result = find_first_value(c)
+                                if result:
+                                    return result
+                            return None
+                        return find_first_value(child)
+            current = current.parent
+        return None
+
+    def find_identifier_definition(self, identifier: str) -> Optional[str]:
+        """Find the definition of an identifier using search_node."""
+        result = self.search_node(self.root, identifier)
         return result if result else "Not found"

@@ -107,7 +107,7 @@ int main(){
         current_pos = 0
         for token in tokens:
             parser_tables.add_token(token.name, token.value)
-            current_pos += len(token.value) + 1 
+            current_pos += len(token.value) + 1
         
         try:
             parser_tables.build_parse_table()
@@ -140,11 +140,8 @@ int main(){
         print("\nPhase 3: Parsing")
         parser = PredictiveParser(parser_tables)
         
-        current_pos = 0
-        token_stream = tokens
-        
         try:
-            parse_tree = parser.parse(token_stream, test_code)
+            parse_tree = parser.parse(tokens, test_code)
             productions = parser.get_production_sequence()
             
             print("\n=== Production Sequence ===")
@@ -154,16 +151,14 @@ int main(){
             print("\n=== Extra Features ===")
             
             tree_searcher = TreeSearcher(parse_tree)
-            test_identifiers = ['x', 's', 't']
-            print("\nIdentifier Definitions:")
-            for identifier in test_identifiers:
-                definition = tree_searcher.find_identifier_definition(identifier)
-                if definition:
-                    print(f"  {identifier:<10} -> {definition}")
+            for identifier in ['x', 's', 't']:
+                result = tree_searcher.search_node(parse_tree, identifier)
+                if result:
+                    print(f"{identifier} -> {result}")
                 else:
-                    print(f"  {identifier:<10} -> Not found")
+                    print(f"{identifier} -> Not found")
             
-            if error_handler.check_syntax(token_stream, test_code):
+            if error_handler.check_syntax(tokens, test_code):
                 print("\nSuccess! All phases completed with no syntax errors.")
             
         except SyntaxError as e:
